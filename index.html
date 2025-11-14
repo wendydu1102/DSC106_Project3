@@ -1,127 +1,138 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CMIP6 Coverage Explorer — Interactive D3 Visualization</title>
-  <meta name="description" content="Explore CMIP6 model coverage across experiments and variables (tas, pr, etc.) using interactive D3 charts." />
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://d3js.org/d3.v7.min.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sunny Cloudy San Diego</title>
+    <script src="https://unpkg.com/d3@7"></script>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <h1>Project 3 - CMIP6 Coverage Explorer</h1>
-    <p class="subtitle">Interactive exploration of CMIP6 (Coupled Model Intercomparison Project Phase 6) zarr-store coverage across models, experiments, and variables.</p>
-  </header>
+    <div class="page">
+        <header>
+            <span class="title-badge">CMIP6 • Amon Table</span>
+            <h1><span style="text-decoration: line-through;">Sunny</span> Cloudy SoCal</h1>
+            <p>Comparing historical coastal cloudiness to a high-emissions future to explore how total cloud fraction might shift along Southern California's shoreline.</p>
+        </header>
 
-  <section id="controls" class="card">
-    <h2>Filters</h2>
-    <div class="filters">
-      <div>
-        <h3>Experiments</h3>
-        <div id="experiment-filters" class="checkboxes"></div>
-      </div>
-      <div>
-        <h3>Variables</h3>
-        <div id="variable-filters" class="checkboxes"></div>
-      </div>
-      <div>
-        <h3>Search Model</h3>
-        <input type="text" id="model-search" placeholder="Type to filter by model (source_id)..." />
-      </div>
-      <div>
-        <button id="reset-btn">Reset Filters</button>
-      </div>
+        <div class="controls-panel">
+            <div class="control-group">
+                <label for="scenarioFilter">Scenario visibility</label>
+                <select id="scenarioFilter">
+                    <option value="both">Show both scenarios</option>
+                    <option value="historical">Historical only</option>
+                    <option value="future">Future only</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="yearSlider">Highlight year</label>
+                <input type="range" id="yearSlider" min="1850" max="2100" value="2000" step="1" />
+                </div>
+            <div class="control-group">
+                <label>Current focus</label>
+                <div class="year-readout" id="yearReadout">Year 2000</div>
+                <div class="year-context" id="yearContext"></div>
+            </div>
+        </div>
+
+        <section id="trendSection">
+            <h2>Total cloud fraction across time</h2>
+            <p class="section-intro">Total cloud fraction inside the Southern California marine layer box (30°–35°N, 125°–115°W) using ACCESS-CM2 historical vs. future runs.</p>
+            <div class="view-controls" style="margin-bottom: 15px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--muted);">View mode:</label>
+                    <button type="button" class="view-toggle active" data-view="annual">Annual</button>
+                    <button type="button" class="view-toggle" data-view="seasonal">Seasonal</button>
+                    <span id="viewModeHint" style="font-size: 11px; color: var(--muted); margin-left: auto;">Click and drag on the chart to zoom into monthly detail</span>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                    <button type="button" class="back-btn" id="resetZoomBtn" style="display: none;">← Reset zoom (show annual view)</button>
+                </div>
+            </div>
+            <div class="chart-frame" id="trendChart"></div>
+            <div class="legend" id="trendLegend"></div>
+            <div id="legendHint" style="display: none; margin-top: 12px; font-size: 13px; color: var(--muted); font-style: italic;">
+                💡 Click legend items above to show or hide specific seasonal lines for comparison
+            </div>
+        </section>
+
+        <section id="writeupSection">
+            <div class="writeup-header" id="writeupToggle">
+                <h2>Design & Development Process</h2>
+                <span class="toggle-icon" id="writeupToggleIcon">▼</span>
+            </div>
+            <div class="writeup-content" id="writeupContent" style="display: none;">
+                <div class="writeup-subsection">
+                    <h3>Design Rationale</h3>
+                    <p>Our visualization design emphasizes clarity and interactive exploration of climate data. We chose line charts as the primary encoding because they effectively show temporal trends and allow easy comparison between historical and future scenarios.</p>
+                    <p><strong>Visual Encodings:</strong></p>
+                    <ul>
+                        <li><strong>Line charts</strong> for temporal trends: We selected line charts to display annual, seasonal, and monthly cloud fraction data because they clearly communicate trends over time and enable direct comparison between scenarios.</li>
+                        <li><strong>Color palette</strong>: We used a color-blind safe palette with dark navy (#314d64) for historical data and teal (#2a9d8f) for future projections. For seasonal views, we assigned distinct colors to each season (DJF: dark blue-green, MAM: teal, JJA: golden, SON: orange) to help users distinguish patterns.</li>
+                        <li><strong>Brush/zoom interaction</strong>: We implemented a brush chart to enable users to zoom into specific time ranges and explore monthly detail. This provides both an overview (annual data) and detailed exploration (monthly data) in a single interface.</li>
+                        <li><strong>Multiple view modes</strong>: We added toggle buttons for "Annual" and "Seasonal" views to let users switch between aggregated and seasonal perspectives without cluttering the interface.</li>
+            </ul>
+                    <p><strong>Interaction Techniques:</strong></p>
+                    <ul>
+                        <li><strong>Year slider</strong>: Allows users to highlight specific years across all visualizations, creating a synchronized exploration experience.</li>
+                        <li><strong>Scenario filter</strong>: Enables users to focus on historical, future, or both scenarios, with automatic x-axis adjustment to show only relevant time periods.</li>
+                        <li><strong>Hover tooltips</strong>: Provide detailed information (year, scenario, cloud fraction, season/month) on demand without cluttering the main view.</li>
+                        <li><strong>Brush selection</strong>: Users can select time ranges in the brush chart to zoom into monthly detail in the main chart, enabling drill-down exploration.</li>
+            </ul>
+                    <p><strong>Design Alternatives Considered:</strong></p>
+                    <ul>
+                        <li>We considered using area charts instead of line charts but decided lines were cleaner and better for comparing multiple series.</li>
+                        <li>We explored stacked bar charts for seasonal comparison but chose overlay line charts for better temporal trend visualization.</li>
+                        <li>We initially considered separate pages for different views but opted for a single-page design with toggleable sections to maintain context.</li>
+            </ul>
+                </div>
+
+                <div class="writeup-subsection">
+            <h3>Development Process</h3>
+                    <p><strong>Team Collaboration:</strong></p>
+                    <p>The development process was collaborative with team members working on different aspects:</p>
+                    <ul>
+                        <li><strong>Data Processing</strong>: One team member focused on processing CMIP6 climate data from Zarr files, extracting the Southern California coastal region, and generating CSV files for annual, seasonal, and monthly aggregates.</li>
+                        <li><strong>Visualization Design</strong>: Team members worked together on designing the layout, selecting color schemes, and planning the interaction flow.</li>
+                        <li><strong>D3.js Implementation</strong>: The visualization code was developed iteratively, with team members implementing different chart components (trend chart, map, seasonal cards) and integrating them into a cohesive dashboard.</li>
+                        <li><strong>Testing & Refinement</strong>: The team collectively tested the visualization, refined interactions, and ensured data accuracy across all views.</li>
+            </ul>
+                    <p><strong>Development Timeline:</strong></p>
+                    <p>Total development time: Approximately <strong>40-50 people-hours</strong> spread across team members.</p>
+                    <p><strong>Time Distribution:</strong></p>
+                    <ul>
+                        <li><strong>Data Processing (15-20 hours)</strong>: Extracting and processing CMIP6 data, handling non-standard calendars (cftime), computing temporal aggregates, and debugging data inconsistencies took the most time.</li>
+                        <li><strong>Initial Visualization Setup (8-10 hours)</strong>: Setting up the D3.js infrastructure, creating basic line charts, implementing data loading, and establishing the overall layout.</li>
+                        <li><strong>Interactive Features (10-12 hours)</strong>: Implementing the brush/zoom functionality, year slider synchronization, scenario filtering, and tooltip interactions required careful coordination between different components.</li>
+                        <li><strong>Seasonal View & Monthly Detail (5-6 hours)</strong>: Adding the seasonal view mode, computing seasonal data from monthly aggregates, and implementing the zoom-to-monthly-detail feature.</li>
+                        <li><strong>Polishing & Debugging (5-7 hours)</strong>: Refining styles, fixing edge cases (like scenario filter affecting x-axis domains), ensuring responsive design, and testing across different browsers.</li>
+            </ul>
+                    <p><strong>Challenges Encountered:</strong></p>
+                    <ul>
+                        <li>Handling cftime objects in xarray when converting to pandas DataFrames required special attention to date extraction.</li>
+                        <li>Coordinating the x-axis domain updates when scenario filters changed across different view modes (annual, seasonal, monthly) was complex.</li>
+                        <li>Implementing smooth transitions between view modes while maintaining state (zoom level, selected year) required careful state management.</li>
+                        <li>Ensuring the brush chart and main chart stayed synchronized when scenario filters changed.</li>
+            </ul>
+        </div>
+            </div>
+        </section>
+
+        <section id="mapSection">
+            <div class="writeup-header" id="mapToggle">
+                <h2>Study region</h2>
+                <span class="toggle-icon" id="mapToggleIcon">▼</span>
+            </div>
+            <div class="writeup-content" id="mapContent" style="display: none;">
+                <p class="section-intro">The analysis focuses on the Southern California coastal marine layer box (30°–35°N, 125°–115°W) where June Gloom and coastal cloud patterns occur.</p>
+                <div class="chart-frame" id="mapChart"></div>
+                <p class="context-note">Study area: 30°–35°N latitude, 125°–115°W longitude (235°–245°E), encompassing the Southern California coast from the Mexican border to central California.</p>
+            </div>
+        </section>
     </div>
-  </section>
 
-  <main class="grid">
-    <section class="card">
-      <h2>By Variable (Treemap)</h2>
-      <svg id="treemap" width="600" height="420" role="img" aria-label="Treemap of variable coverage"></svg>
-      <p class="caption">Size encodes number of zarr stores for each variable within the current filter.</p>
-    </section>
+    <div class="tooltip" id="tooltip"></div>
 
-    <section class="card">
-      <h2>Models × Experiments (Heatmap)</h2>
-      <svg id="heatmap" width="700" height="520" role="img" aria-label="Heatmap of models by experiments"></svg>
-      <p class="caption">Color encodes count of available variables for each (model, experiment) combination.</p>
-    </section>
-
-    <section class="card">
-      <h2>Publication Year (Histogram + Brush)</h2>
-      <svg id="year-hist" width="700" height="300" role="img" aria-label="Histogram of publication year"></svg>
-      <p class="caption">Brush to filter by publication year derived from the dataset version field.</p>
-    </section>
-
-    <section class="card" id="details">
-      <h2>Matching Records</h2>
-      <div id="records"></div>
-      <p class="caption">Click any heatmap cell to see the first 50 matching records.</p>
-    </section>
-  </main>
-
-  <section id="writeup" class="card">
-    <h2>Write-up</h2>
-    <h3>Motivation & Question</h3>
-    <p>
-      Earth system model data in CMIP6 is vast and heterogeneous. Researchers often need to know which
-      variables are available for which experiments and models <em>before</em> deciding what to download and analyze.
-      Our question: <strong>Which models provide coverage for key climate variables (e.g., near-surface air temperature <code>tas</code>, precipitation <code>pr</code>) across future scenarios (SSPs) and historical runs?</strong>
-    </p>
-
-    <h3>Data</h3>
-    <p>
-      We use a public catalog of CMIP6 Zarr stores (subsetted for size on this page) containing fields such as
-      <code>source_id</code> (model), <code>experiment_id</code>, <code>variable_id</code>, and the cloud <code>zstore</code> path.
-      The subset includes variables {tas, tasmax, tasmin, pr, psl, tos, siconc, sos} and experiments {historical, ssp126, ssp245, ssp370, ssp585}.
-      Each row corresponds to a distinct Zarr store. See the repository <code>data/</code> folder for exact CSVs used by this page.
-    </p>
-
-    <h3>Visual Encodings</h3>
-    <ul>
-      <li><strong>Treemap</strong> — a rectangle area for each variable sized by the number of stores (position and area for comparison).</li>
-      <li><strong>Heatmap</strong> — rows: models, columns: experiments, color: number of variables matching current filters.</li>
-      <li><strong>Histogram</strong> — bars by publication <em>year</em> (from the <code>version</code> field), enabling a brush-based time filter.</li>
-    </ul>
-
-    <h3>Interactions</h3>
-    <ul>
-      <li>Dynamic query filters for experiments and variables.</li>
-      <li>Text search for models (<code>source_id</code>).</li>
-      <li>Treemap click to focus on a variable.</li>
-      <li>Heatmap click to reveal a details table of matching records.</li>
-      <li>Brush on the year histogram to restrict the time window.</li>
-    </ul>
-
-    <h3>Data Transformations</h3>
-    <p>
-      We filter to the selected experiments/variables and (optional) year brush range and model search term.
-      We then aggregate counts per variable (treemap) and per (model, experiment) pair (heatmap). These transformations are standard and
-      do not remove informative outliers; instead they summarize availability to aid discovery.
-    </p>
-
-    <h3>Development Process</h3>
-    <p>
-      Our team consided of Shunyi Du (s7du@ucsd.edu), Vanshika Somani (vsomani@ucsd.edu), Amjad Muhamad Afandy (amuhamadafandy@ucsd.edu), Sunny Sun (chs019@ucsd.edu) 
-      and we spent ~25 hours on this project. One member handled the data wrangling and page scaffolding,
-      one built the treemap, one built the heatmap and histogram, and one integrated interactions and polished up final product.
-      Most time was spent on interaction polish like brush communications and reset logic and debugging layout.
-    </p>
-
-    <h3>Rationale for Choices</h3>
-    <p>
-      We chose a treemap to quickly compare variable coverage magnitudes, and a heatmap to reveal which models
-      support which experiments at a glance. A year histogram with brushing lets us focus on well‑populated vintages
-      (e.g., 2019–2021) and verify recency. Alternative designs we considered included a faceted bar chart and a bipartite
-      node‑link diagram, but they either consumed more space or provided less dense comparisons.
-    </p>
-  </section>
-
-  <footer>
-    <p>Built with D3.js. Data © CMIP6 providers. This is a student project for DSC106 at UCSD.</p>
-  </footer>
-
-  <script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
