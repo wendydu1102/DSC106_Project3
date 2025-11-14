@@ -35,7 +35,9 @@ const state = {
     seasonalData: null,
     viewMode: "annual", // "annual", "seasonal", or "monthly" (when zoomed)
     seasonalVisibility: new Set(), // Track which season-scenario combinations are visible
-    sliderTooltipTimeout: null // Timeout for showing tooltip when slider stops
+    sliderTooltipTimeout: null, // Timeout for showing tooltip when slider stops
+    actualDataRange: null, // Actual min/max dateValue range of visible data when zoomed
+    mapRendered: false // Track if map has been rendered
 };
 
 const tooltip = d3.select("#tooltip");
@@ -88,6 +90,7 @@ Promise.all([
             setupViewToggles();
             setupWriteupToggle();
             setupMapToggle();
+            setupRegionLink();
             renderTrendChart(filteredTimeseries, monthly, null, state.viewMode);
             renderMap(); // Render map even though it's hidden initially
 
@@ -311,14 +314,40 @@ function setupMapToggle() {
     header.on("click", function(event) {
         event.preventDefault();
         event.stopPropagation();
-        const isVisible = content.style("display") !== "none";
-        
-        if (isVisible) {
-            content.style("display", "none");
-            header.classed("active", false);
-        } else {
-            content.style("display", "block");
-            header.classed("active", true);
+        toggleMapSection();
+    });
+}
+
+function toggleMapSection() {
+    const content = d3.select("#mapContent");
+    const header = d3.select("#mapToggle");
+    const isVisible = content.style("display") !== "none";
+    
+    if (isVisible) {
+        content.style("display", "none");
+        header.classed("active", false);
+    } else {
+        content.style("display", "block");
+        header.classed("active", true);
+        // Render map if not already rendered
+        if (!state.mapRendered) {
+            renderMap();
+            state.mapRendered = true;
+        }
+    }
+}
+
+function setupRegionLink() {
+    const regionLink = d3.select("#regionLink");
+    
+    regionLink.on("click", function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleMapSection();
+        // Scroll to map section smoothly
+        const mapSection = document.getElementById("mapSection");
+        if (mapSection) {
+            mapSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
     });
 }
@@ -346,32 +375,11 @@ function setupControls([minYear, maxYear]) {
         
         if (state.isZoomed && state.zoomedRange) {
             // In monthly view, value represents dateValue (year + month/12)
-            // Clamp value to the zoomed range to ensure it stays within bounds
-            const [startYear, endYear] = state.zoomedRange;
-            const startDateValue = startYear;
-            const endDateValue = endYear + 11/12;
-            value = Math.max(startDateValue, Math.min(endDateValue, value));
-            
-            // Update slider value if it was clamped (shouldn't happen, but safety check)
-            if (value !== +event.target.value) {
-                slider.property("value", value);
-            }
-            
             state.monthValue = value;
             state.year = Math.floor(value);
-            updateYearHighlight(value, true); // Pass clamped value for monthly
+            updateYearHighlight(value, true); // Pass value directly for monthly
         } else {
             // In annual/seasonal view, value is just year
-            // Clamp to the current data range
-            const sliderMin = +slider.attr("min");
-            const sliderMax = +slider.attr("max");
-            value = Math.max(sliderMin, Math.min(sliderMax, value));
-            
-            // Update slider value if it was clamped (shouldn't happen, but safety check)
-            if (value !== +event.target.value) {
-                slider.property("value", value);
-            }
-            
             state.year = value;
             state.monthValue = null;
             updateYearHighlight(value, false);
@@ -382,32 +390,7 @@ function setupControls([minYear, maxYear]) {
     slider.on("change", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        let value = +event.target.value;
-        
-        // Clamp value to ensure it's within bounds (double-check)
-        if (state.isZoomed && state.zoomedRange) {
-            const [startYear, endYear] = state.zoomedRange;
-            const startDateValue = startYear;
-            const endDateValue = endYear + 11/12;
-            value = Math.max(startDateValue, Math.min(endDateValue, value));
-            // Update slider value if it was clamped
-            if (value !== +event.target.value) {
-                slider.property("value", value);
-                // Update state with clamped value
-                state.monthValue = value;
-                state.year = Math.floor(value);
-            }
-        } else {
-            const sliderMin = +slider.attr("min");
-            const sliderMax = +slider.attr("max");
-            value = Math.max(sliderMin, Math.min(sliderMax, value));
-            // Update slider value if it was clamped
-            if (value !== +event.target.value) {
-                slider.property("value", value);
-                // Update state with clamped value
-                state.year = value;
-            }
-        }
+        const value = +event.target.value;
         
         // Clear any pending timeout
         if (state.sliderTooltipTimeout) {
@@ -423,12 +406,21 @@ function setupControls([minYear, maxYear]) {
 
 function updateSliderForViewMode(slider, minYear, maxYear) {
     if (state.isZoomed && state.zoomedRange && state.monthlyData) {
-        // Monthly view: slider should step through months within the zoomed range
-        const [startYear, endYear] = state.zoomedRange;
-        const startDateValue = startYear; // January of start year
-        const endDateValue = endYear + 11 / 12; // December of end year
+        // Monthly view: slider should step through months within the actual visible data range
+        // Use actual data range if available, otherwise fall back to year boundaries
+        let startDateValue, endDateValue;
         
-        // Clamp current value to the zoomed range
+        if (state.actualDataRange && state.actualDataRange.length === 2) {
+            // Use the actual min/max from the visible data
+            [startDateValue, endDateValue] = state.actualDataRange;
+        } else {
+            // Fallback to year boundaries
+            const [startYear, endYear] = state.zoomedRange;
+            startDateValue = startYear; // January of start year
+            endDateValue = endYear + 11 / 12; // December of end year
+        }
+        
+        // Clamp current value to the actual visible data range
         let currentValue = state.monthValue !== null ? state.monthValue : 
                            (state.year !== null ? state.year + 6 / 12 : (startDateValue + endDateValue) / 2);
         currentValue = Math.max(startDateValue, Math.min(endDateValue, currentValue));
@@ -445,10 +437,12 @@ function updateSliderForViewMode(slider, minYear, maxYear) {
         
         // Update the readout to show the current zoom range
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const startMonthName = monthNames[0]; // January
-        const endMonthName = monthNames[11]; // December
-        const startYearInt = Math.floor(startYear);
-        const endYearInt = Math.floor(endYear);
+        const startYearInt = Math.floor(startDateValue);
+        const startMonthNum = Math.round((startDateValue - startYearInt) * 12) + 1;
+        const endYearInt = Math.floor(endDateValue);
+        const endMonthNum = Math.round((endDateValue - endYearInt) * 12) + 1;
+        const startMonthName = monthNames[Math.max(0, Math.min(11, startMonthNum - 1))];
+        const endMonthName = monthNames[Math.max(0, Math.min(11, endMonthNum - 1))];
         d3.select("#yearReadout").text(`Range: ${startMonthName} ${startYearInt} - ${endMonthName} ${endYearInt}`);
     } else {
         // Annual/seasonal view: slider steps through years
@@ -493,35 +487,40 @@ function setupControls([minYear, maxYear]) {
         
         if (state.isZoomed && state.zoomedRange) {
             // In monthly view, value represents dateValue (year + month/12)
-            // Clamp value to the zoomed range to ensure it stays within bounds
-            const [startYear, endYear] = state.zoomedRange;
-            const startDateValue = startYear;
-            const endDateValue = endYear + 11/12;
-            value = Math.max(startDateValue, Math.min(endDateValue, value));
-            
-            // Update slider value if it was clamped (shouldn't happen, but safety check)
-            if (value !== +event.target.value) {
-                slider.property("value", value);
+            // Clamp value to the actual visible data range
+            let clampedValue = value;
+            if (state.actualDataRange && state.actualDataRange.length === 2) {
+                const [minDateValue, maxDateValue] = state.actualDataRange;
+                clampedValue = Math.max(minDateValue, Math.min(maxDateValue, value));
+            } else {
+                // Fallback to year boundaries
+                const [startYear, endYear] = state.zoomedRange;
+                clampedValue = Math.max(startYear, Math.min(endYear + 11/12, value));
             }
             
-            state.monthValue = value;
-            state.year = Math.floor(value);
-            updateYearHighlight(value, true); // Pass clamped value for monthly
+            // Update slider if value was clamped
+            if (clampedValue !== value) {
+                slider.property("value", clampedValue);
+            }
+            
+            state.monthValue = clampedValue;
+            state.year = Math.floor(clampedValue);
+            updateYearHighlight(clampedValue, true); // Pass clamped value for monthly
         } else {
             // In annual/seasonal view, value is just year
-            // Clamp to the current data range
+            // Clamp to current visible range based on scenario filter
             const sliderMin = +slider.attr("min");
             const sliderMax = +slider.attr("max");
-            value = Math.max(sliderMin, Math.min(sliderMax, value));
+            const clampedValue = Math.max(sliderMin, Math.min(sliderMax, value));
             
-            // Update slider value if it was clamped (shouldn't happen, but safety check)
-            if (value !== +event.target.value) {
-                slider.property("value", value);
+            // Update slider if value was clamped
+            if (clampedValue !== value) {
+                slider.property("value", clampedValue);
             }
             
-            state.year = value;
+            state.year = clampedValue;
             state.monthValue = null;
-            updateYearHighlight(value, false);
+            updateYearHighlight(clampedValue, false);
         }
     });
     
@@ -529,32 +528,7 @@ function setupControls([minYear, maxYear]) {
     slider.on("change", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        let value = +event.target.value;
-        
-        // Clamp value to ensure it's within bounds (double-check)
-        if (state.isZoomed && state.zoomedRange) {
-            const [startYear, endYear] = state.zoomedRange;
-            const startDateValue = startYear;
-            const endDateValue = endYear + 11/12;
-            value = Math.max(startDateValue, Math.min(endDateValue, value));
-            // Update slider value if it was clamped
-            if (value !== +event.target.value) {
-                slider.property("value", value);
-                // Update state with clamped value
-                state.monthValue = value;
-                state.year = Math.floor(value);
-            }
-        } else {
-            const sliderMin = +slider.attr("min");
-            const sliderMax = +slider.attr("max");
-            value = Math.max(sliderMin, Math.min(sliderMax, value));
-            // Update slider value if it was clamped
-            if (value !== +event.target.value) {
-                slider.property("value", value);
-                // Update state with clamped value
-                state.year = value;
-            }
-        }
+        const value = +event.target.value;
         
         // Clear any pending timeout
         if (state.sliderTooltipTimeout) {
@@ -567,10 +541,41 @@ function setupControls([minYear, maxYear]) {
         }, 100);
     });
 
+    // Setup scenario toggle buttons
+    d3.selectAll(".scenario-toggle-btn").on("click", function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const clickedButton = d3.select(this);
+        const newValue = clickedButton.attr("data-value");
+        
+        // Update active state
+        d3.selectAll(".scenario-toggle-btn").classed("active", false);
+        clickedButton.classed("active", true);
+        
+        // Update hidden select for backward compatibility
+        d3.select("#scenarioFilter").property("value", newValue);
+        
+        // Update state and trigger change
+        state.scenarioFilter = newValue;
+        triggerScenarioFilterChange(newValue);
+    });
+    
+    // Also keep the select handler for backward compatibility
     d3.select("#scenarioFilter").on("change", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        state.scenarioFilter = event.target.value;
+        const newValue = event.target.value;
+        
+        // Update button states to match
+        d3.selectAll(".scenario-toggle-btn").classed("active", false);
+        d3.select(`.scenario-toggle-btn[data-value="${newValue}"]`).classed("active", true);
+        
+        state.scenarioFilter = newValue;
+        triggerScenarioFilterChange(newValue);
+    });
+    
+    function triggerScenarioFilterChange(newValue) {
         d3.select("#trendChart").selectAll("*").remove();
         state.brush = null;
 
@@ -595,12 +600,13 @@ function setupControls([minYear, maxYear]) {
                     // Reset zoom when filter changes
                     state.zoomedRange = null;
                     state.isZoomed = false;
+                    state.actualDataRange = null;
                     d3.select("#resetZoomBtn").style("display", "none");
                     
                     // Update seasonal visibility for new scenario filter
                     // Clear and rebuild visibility set based on current filter
                     state.seasonalVisibility.clear();
-                    const visibleScenarios = state.scenarioFilter === "both" ? scenarioOrder : [state.scenarioFilter];
+                    const visibleScenarios = newValue === "both" ? scenarioOrder : [newValue];
                     const seasons = ["DJF", "MAM", "JJA", "SON"];
                     visibleScenarios.forEach(scenario => {
                         seasons.forEach(season => {
@@ -628,7 +634,7 @@ function setupControls([minYear, maxYear]) {
                     }
                     updateYearCopy(filteredTimeseries, state.year);
                 });
-    });
+    }
 }
 
 function renderTrendChart(timeseries, monthly = null, zoomRange = null, viewMode = "annual") {
@@ -672,6 +678,9 @@ function renderTrendChart(timeseries, monthly = null, zoomRange = null, viewMode
         const xMin = d3.min(filteredMonthly, d => d.dateValue);
         const xMax = d3.max(filteredMonthly, d => d.dateValue);
         x = d3.scaleLinear().domain([xMin, xMax]).range([0, innerWidth]);
+        
+        // Store actual data range for slider
+        state.actualDataRange = [xMin, xMax];
         
         // Format x-axis for monthly data
         xAxis = d3.axisBottom(x)
@@ -901,7 +910,17 @@ function renderTrendChart(timeseries, monthly = null, zoomRange = null, viewMode
                 
                 // Update hint text
                 if (state.isZoomed) {
-                    d3.select("#viewModeHint").text("Use slider to navigate months • Click and drag to zoom further • Click reset to return to annual view");
+                    // Check if at minimum zoom
+                    const zoomRange = state.zoomedRange;
+                    const rangeYears = zoomRange ? (zoomRange[1] - zoomRange[0]) : 0;
+                    const HARD_MIN_RANGE = 1; // 1 year minimum
+                    const isAtMinZoom = rangeYears <= HARD_MIN_RANGE + 0.1;
+                    
+                    if (isAtMinZoom) {
+                        d3.select("#viewModeHint").text("Use slider to navigate months • Minimum zoom reached (1 year) • Click reset to return to annual view");
+                    } else {
+                        d3.select("#viewModeHint").text("Use slider to navigate months • Click and drag to zoom further • Click reset to return to annual view");
+                    }
                 } else {
                     d3.select("#viewModeHint").text("Click and drag on the chart to select a time range for monthly detail");
                 }
@@ -1012,23 +1031,42 @@ function setupBrushOnMainChart(timeseries, monthly, g, x, innerWidth, innerHeigh
             return;
         }
 
+        // Hard minimum: 1 year (12 months) - prevent zooming in too much
+        const HARD_MIN_RANGE = 1; // 1 year minimum
+
         // Get the selected range
         const [x0, x1] = event.selection.map(x.invert);
         let startYear = Math.max(years[0], x0);
         let endYear = Math.min(years[1], x1);
 
         // Calculate minimum range based on current zoom level
-        // Absolute minimum: 6 months (0.5 years) - prevents zooming in too far
-        // If not zoomed, minimum is 5 years
-        // If already zoomed, minimum is 6 months (0.5 years)
         const currentRange = years[1] - years[0];
-        const absoluteMinRange = 0.5; // 6 months - absolute minimum
-        const minRange = currentRange < 10 ? absoluteMinRange : 5; // If already zoomed to < 10 years, allow 6 months minimum
+        
+        // Adaptive minimum based on current zoom level, but never less than hard minimum
+        let minRange;
+        if (currentRange < 10) {
+            // If already zoomed to < 10 years, allow 1 year minimum
+            minRange = Math.max(HARD_MIN_RANGE, currentRange * 0.1); // 10% of current range, but at least 1 year
+        } else {
+            // If not zoomed or zoomed to > 10 years, minimum is 5 years
+            minRange = 5;
+        }
+        
+        // Ensure we never go below the hard minimum
+        minRange = Math.max(HARD_MIN_RANGE, minRange);
         
         if (endYear - startYear < minRange) {
             const center = (startYear + endYear) / 2;
             startYear = Math.max(years[0], center - minRange / 2);
             endYear = Math.min(years[1], center + minRange / 2);
+            
+            // Double-check: if the enforced range is still too small, expand it
+            if (endYear - startYear < HARD_MIN_RANGE) {
+                const center2 = (startYear + endYear) / 2;
+                startYear = Math.max(years[0], center2 - HARD_MIN_RANGE / 2);
+                endYear = Math.min(years[1], center2 + HARD_MIN_RANGE / 2);
+            }
+            
             // Update brush position to show enforced minimum
             brushG.call(brush.move, [x(startYear), x(endYear)]);
         }
@@ -1036,24 +1074,41 @@ function setupBrushOnMainChart(timeseries, monthly, g, x, innerWidth, innerHeigh
         // Hide label
         brushLabel.style("opacity", 0);
 
+        // Check if we've reached the minimum zoom limit
+        const rangeYears = endYear - startYear;
+        const isAtMinZoom = rangeYears <= HARD_MIN_RANGE + 0.1; // Add small tolerance for floating point
+
         // Zoom the main chart to show monthly data for the selected time frame
         state.zoomedRange = [startYear, endYear];
         state.isZoomed = true;
         state.viewMode = "monthly"; // Override view mode when zoomed
-        // Set monthValue to middle of selected range
-        if (state.monthValue === null || state.monthValue < startYear || state.monthValue > endYear + 11/12) {
-            state.monthValue = startYear + (endYear - startYear) / 2;
-        }
         d3.select("#resetZoomBtn").style("display", "inline-block");
         renderTrendChart(state.annualData, monthly, [startYear, endYear], "monthly");
-        // Update slider configuration for monthly view - use the zoomed range
-        updateSliderForViewMode(d3.select("#yearSlider"), startYear, endYear);
+        
+        // After chart renders, update slider to use actual data range
+        // The renderTrendChart will set state.actualDataRange
+        // Then set monthValue to leftmost point if current value is outside range
+        const slider = d3.select("#yearSlider");
+        if (state.actualDataRange && state.actualDataRange.length === 2) {
+            const [actualMin, actualMax] = state.actualDataRange;
+            // Set monthValue to leftmost point if current value is outside range
+            if (state.monthValue === null || state.monthValue < actualMin || state.monthValue > actualMax) {
+                state.monthValue = actualMin; // Start at leftmost visible point
+            }
+        } else {
+            // Fallback: set to middle of selected range
+            if (state.monthValue === null || state.monthValue < startYear || state.monthValue > endYear + 11/12) {
+                state.monthValue = startYear + (endYear - startYear) / 2;
+            }
+        }
+        
+        // Update slider configuration for monthly view - will use actual data range
+        updateSliderForViewMode(slider, startYear, endYear);
         updateYearHighlight(state.monthValue, true);
         
-        // Update hint text to indicate further zooming is possible
-        const rangeYears = endYear - startYear;
-        if (rangeYears < 2) {
-            d3.select("#viewModeHint").text("Use slider to navigate months • Click and drag to zoom further • Click reset to return to annual view");
+        // Update hint text - show different message if at minimum zoom
+        if (isAtMinZoom) {
+            d3.select("#viewModeHint").text("Use slider to navigate months • Minimum zoom reached (1 year) • Click reset to return to annual view");
         } else {
             d3.select("#viewModeHint").text("Use slider to navigate months • Click and drag to zoom further • Click reset to return to annual view");
         }
@@ -1066,6 +1121,7 @@ function setupBrushOnMainChart(timeseries, monthly, g, x, innerWidth, innerHeigh
         }
         state.zoomedRange = null;
         state.isZoomed = false;
+        state.actualDataRange = null;
         state.monthValue = null;
         d3.select("#resetZoomBtn").style("display", "none");
         renderTrendChart(state.annualData, monthly, null, "annual");
@@ -1094,6 +1150,7 @@ function setupResetZoom() {
         } else {
             state.zoomedRange = null;
             state.isZoomed = false;
+            state.actualDataRange = null;
             state.monthValue = null;
             state.viewMode = "annual";
             d3.select("#resetZoomBtn").style("display", "none");
@@ -1657,8 +1714,12 @@ function updateYearHighlight(value, isMonthlyValue = false) {
         month = Math.max(1, Math.min(12, month)); // Clamp to 1-12
         xValue = yearDateValue;
         
-        // Clamp to visible range if zoomed
-        if (state.isZoomed && state.zoomedRange) {
+        // Clamp to actual visible data range if zoomed
+        if (state.isZoomed && state.actualDataRange && state.actualDataRange.length === 2) {
+            const [minDateValue, maxDateValue] = state.actualDataRange;
+            xValue = Math.max(minDateValue, Math.min(maxDateValue, yearDateValue));
+        } else if (state.isZoomed && state.zoomedRange) {
+            // Fallback to year boundaries
             const [startYear, endYear] = state.zoomedRange;
             const minDateValue = startYear;
             const maxDateValue = endYear + 11 / 12; // End of December in end year
@@ -1784,13 +1845,14 @@ function updateYearHighlight(value, isMonthlyValue = false) {
         .on("mouseenter", (event, d) => {
             const scenarioName = d.scenario === "historical" ? "Historical" : 
                                d.scenario === "future" ? "Future" : d.scenario;
-            const monthText = d.month ? `, ${d.month}` : "";
-            const seasonText = d.season ? `, ${d.season}` : "";
+            // Pass month as number if it exists, for proper formatting in tooltip
+            const monthNum = d.month && typeof d.month === 'number' ? d.month : 
+                           (d.month ? parseInt(d.month) : null);
             showTooltip(event, {
                 year: d.year,
                 clt: d.clt,
                 scenario: scenarioName,
-                month: monthText,
+                month: monthNum,
                 season: d.season
             });
         })
@@ -1863,20 +1925,12 @@ function updateYearCopy(timeseries, year, month = null) {
 
     const parts = [];
     if (historical) {
-        if (month !== null && historical.month) {
-            const monthName = monthNames[historical.month - 1] || `Month ${historical.month}`;
-            parts.push(`Historical ${monthName} ${historical.year}: ${historical.clt.toFixed(1)}%`);
-        } else {
-            parts.push(`Historical ${historical.year}: ${historical.clt.toFixed(1)}%`);
-        }
+        // Show scenario range instead of specific year
+        parts.push(`Historical (1850-2014): ${historical.clt.toFixed(1)}%`);
     }
     if (future) {
-        if (month !== null && future.month) {
-            const monthName = monthNames[future.month - 1] || `Month ${future.month}`;
-            parts.push(`Future ${monthName} ${future.year}: ${future.clt.toFixed(1)}%`);
-        } else {
-            parts.push(`Future ${future.year}: ${future.clt.toFixed(1)}%`);
-        }
+        // Show scenario range instead of specific year
+        parts.push(`Future (2015-2100): ${future.clt.toFixed(1)}%`);
     }
     if (historical && future) {
         const diff = future.clt - historical.clt;
@@ -1906,8 +1960,23 @@ function showTooltip(event, d) {
     }
     
     const scenarioName = scenarioLabels[d.scenario] || d.scenario;
-    const monthText = d.month ? `<br /><span>Month: ${d.month}</span>` : "";
     const seasonText = d.season ? `<br /><span>Season: ${seasonLabels[d.season] || d.season}</span>` : "";
+    
+    // Check if we're in monthly view (month exists and is a number between 1-12)
+    const isMonthlyView = d.month && typeof d.month === 'number' && d.month >= 1 && d.month <= 12;
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    // Format header: "Jan 2021" for monthly view, "2021" for annual/seasonal
+    let headerText;
+    if (isMonthlyView) {
+        const monthName = monthNames[d.month - 1] || d.month;
+        headerText = `<strong>${monthName} ${d.year}</strong>`;
+    } else {
+        headerText = `<strong>${d.year}</strong>`;
+    }
+    
+    // Don't show month text separately in monthly view (already in header)
+    // Only show season if it exists
     
     // Move tooltip into chart container for proper absolute positioning
     const containerNode = container.node();
@@ -1920,7 +1989,7 @@ function showTooltip(event, d) {
         .style("top", `${tooltipY}px`)
         .style("opacity", 1)
         .style("transform", "translateY(0)")
-        .html(`<strong>${d.year}${d.month ? ` ${d.month}` : ""}</strong><span>${scenarioName}</span>${monthText}${seasonText}<br /><span>${d.clt.toFixed(2)}% cloud fraction</span>`);
+        .html(`${headerText}<span style="color: #b0b0b0;">${scenarioName}</span>${seasonText}<br /><span>${d.clt.toFixed(2)}% cloud fraction</span>`);
 }
 
 function hideTooltip() {
@@ -2047,20 +2116,79 @@ function showTooltipAtHighlightedPoint() {
     
     // Show tooltip for all points (or first if multiple)
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const monthText = firstPoint.month ? `<br /><span>Month: ${monthNames[firstPoint.month - 1] || firstPoint.month}</span>` : "";
-    const seasonText = firstPoint.season ? `<br /><span>Season: ${seasonLabels[firstPoint.season] || firstPoint.season}</span>` : "";
-    const scenarioName = scenarioLabels[firstPoint.scenario] || firstPoint.scenario;
     
-    // If multiple scenarios, show info for all
-    let html = `<strong>${firstPoint.year}${firstPoint.month ? ` ${monthNames[firstPoint.month - 1]}` : ""}</strong>`;
-    if (pointDataArray.length > 1) {
-        // Show all scenarios
-        pointDataArray.forEach((p, i) => {
-            const scnName = scenarioLabels[p.scenario] || p.scenario;
-            html += `<br /><span>${scnName}: ${p.clt.toFixed(2)}%</span>`;
-        });
+    // Check if we're in seasonal view
+    const { useSeasonal } = state.trendChart || {};
+    const isSeasonalView = useSeasonal || false;
+    
+    // Check if we're in monthly view (month exists and is a number between 1-12)
+    const isMonthlyView = firstPoint.month && typeof firstPoint.month === 'number' && firstPoint.month >= 1 && firstPoint.month <= 12;
+    
+    // Format header: "Jan 2021" for monthly view, "2021" for annual/seasonal
+    let headerText;
+    if (isMonthlyView) {
+        const monthName = monthNames[firstPoint.month - 1] || firstPoint.month;
+        headerText = `<strong>${monthName} ${firstPoint.year}</strong>`;
     } else {
-        html += `<span>${scenarioName}</span>${monthText}${seasonText}<br /><span>${firstPoint.clt.toFixed(2)}% cloud fraction</span>`;
+        headerText = `<strong>${firstPoint.year}</strong>`;
+    }
+    
+    // If multiple scenarios/seasons, show info for all
+    let html = headerText;
+    if (pointDataArray.length > 1) {
+        // In seasonal view, show scenario name first, then season names
+        if (isSeasonalView) {
+            // Group points by scenario to show scenario name once
+            const scenarioGroups = {};
+            pointDataArray.forEach((p, i) => {
+                const scenario = p.scenario || 'unknown';
+                if (!scenarioGroups[scenario]) {
+                    scenarioGroups[scenario] = [];
+                }
+                scenarioGroups[scenario].push(p);
+            });
+            
+            // Display each scenario with its seasons
+            Object.keys(scenarioGroups).forEach((scenario, idx) => {
+                const scnName = scenarioLabels[scenario] || scenario;
+                const seasonPoints = scenarioGroups[scenario];
+                
+                // Show scenario name on same line as header (no break), then seasons on new lines
+                // Use grey color for scenario names
+                if (idx === 0) {
+                    html += `<span style="color: #b0b0b0;">${scnName}</span>`;
+                } else {
+                    html += `<br /><span style="color: #b0b0b0;">${scnName}</span>`;
+                }
+                
+                // Show each season for this scenario
+                seasonPoints.forEach((p) => {
+                    const seasonName = p.season ? (seasonLabels[p.season] || p.season) : '';
+                    if (seasonName) {
+                        html += `<br /><span>${seasonName}: ${p.clt.toFixed(2)}%</span>`;
+                    }
+                });
+            });
+        } else {
+            // Show all scenarios (for annual/monthly view)
+            pointDataArray.forEach((p, i) => {
+                const scnName = scenarioLabels[p.scenario] || p.scenario;
+                html += `<br /><span style="color: #b0b0b0;">${scnName}</span>: <span>${p.clt.toFixed(2)}%</span>`;
+            });
+        }
+    } else {
+        // Single point - format based on view mode
+        if (isSeasonalView && firstPoint.season) {
+            // In seasonal view, show scenario name on same line as header, then season name
+            const scenarioName = scenarioLabels[firstPoint.scenario] || firstPoint.scenario;
+            const seasonName = seasonLabels[firstPoint.season] || firstPoint.season;
+            html += `<span style="color: #b0b0b0;">${scenarioName}</span><br /><span>${seasonName}: ${firstPoint.clt.toFixed(2)}%</span>`;
+        } else {
+            // In annual/monthly view, show scenario name
+            const scenarioName = scenarioLabels[firstPoint.scenario] || firstPoint.scenario;
+            const seasonText = firstPoint.season ? `<br /><span>Season: ${seasonLabels[firstPoint.season] || firstPoint.season}</span>` : "";
+            html += `<span style="color: #b0b0b0;">${scenarioName}</span>${seasonText}<br /><span>${firstPoint.clt.toFixed(2)}% cloud fraction</span>`;
+        }
     }
     
     tooltip

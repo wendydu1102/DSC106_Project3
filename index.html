@@ -10,34 +10,56 @@
 <body>
     <div class="page">
         <header>
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="github-link" aria-label="View on GitHub">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                </svg>
+            </a>
             <span class="title-badge">CMIP6 • Amon Table</span>
             <h1><span style="text-decoration: line-through;">Sunny</span> Cloudy SoCal</h1>
             <p>Comparing historical coastal cloudiness to a high-emissions future to explore how total cloud fraction might shift along Southern California's shoreline.</p>
         </header>
 
         <div class="controls-panel">
-            <div class="control-group">
-                <label for="scenarioFilter">Scenario visibility</label>
-                <select id="scenarioFilter">
-                    <option value="both">Show both scenarios</option>
-                    <option value="historical">Historical only</option>
-                    <option value="future">Future only</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <label for="yearSlider">Highlight year</label>
-                <input type="range" id="yearSlider" min="1850" max="2100" value="2000" step="1" />
+            <div class="controls-left">
+                <div class="control-group">
+                    <label>Scenario visibility</label>
+                    <div class="scenario-toggle-group" id="scenarioToggleGroup">
+                        <button type="button" class="scenario-toggle-btn active" data-value="both" aria-label="Show both scenarios">
+                            <span>Both</span>
+                        </button>
+                        <button type="button" class="scenario-toggle-btn" data-value="historical" aria-label="Historical only">
+                            <span>Historical</span>
+                        </button>
+                        <button type="button" class="scenario-toggle-btn" data-value="future" aria-label="Future only">
+                            <span>Future</span>
+                        </button>
+                    </div>
+                    <!-- Hidden select for backward compatibility -->
+                    <select id="scenarioFilter" style="display: none;">
+                        <option value="both" selected>Show both scenarios</option>
+                        <option value="historical">Historical only</option>
+                        <option value="future">Future only</option>
+                    </select>
                 </div>
-            <div class="control-group">
-                <label>Current focus</label>
-                <div class="year-readout" id="yearReadout">Year 2000</div>
-                <div class="year-context" id="yearContext"></div>
             </div>
-        </div>
+            <div class="controls-divider"></div>
+            <div class="controls-right">
+                <div class="control-group">
+                    <label for="yearSlider">Highlight year</label>
+                    <input type="range" id="yearSlider" min="1850" max="2100" value="2000" step="1" />
+                    </div>
+                <div class="control-group">
+                    <label>Current focus</label>
+                    <div class="year-readout" id="yearReadout">Year 2000</div>
+                    <div class="year-context" id="yearContext"></div>
+                </div>
+            </div>
+                </div>
 
         <section id="trendSection">
             <h2>Total cloud fraction across time</h2>
-            <p class="section-intro">Total cloud fraction inside the Southern California marine layer box (30°–35°N, 125°–115°W) using ACCESS-CM2 historical vs. future runs.</p>
+            <p class="section-intro">Total cloud fraction inside the <span class="region-link" id="regionLink">Southern California marine layer box (30°–35°N, 125°–115°W)</span> using ACCESS-CM2 historical vs. future runs.</p>
             <div class="view-controls" style="margin-bottom: 15px;">
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                     <label style="font-size: 12px; font-weight: 600; color: var(--muted);">View mode:</label>
@@ -53,68 +75,83 @@
             <div class="legend" id="trendLegend"></div>
             <div id="legendHint" style="display: none; margin-top: 12px; font-size: 13px; color: var(--muted); font-style: italic;">
                 💡 Click legend items above to show or hide specific seasonal lines for comparison
-            </div>
+        </div>
         </section>
 
         <section id="writeupSection">
             <div class="writeup-header" id="writeupToggle">
-                <h2>Design & Development Process</h2>
+                <h2>Write-Up</h2>
                 <span class="toggle-icon" id="writeupToggleIcon">▼</span>
             </div>
             <div class="writeup-content" id="writeupContent" style="display: none;">
                 <div class="writeup-subsection">
-                    <h3>Design Rationale</h3>
-                    <p>Our visualization design emphasizes clarity and interactive exploration of climate data. We chose line charts as the primary encoding because they effectively show temporal trends and allow easy comparison between historical and future scenarios.</p>
-                    <p><strong>Visual Encodings:</strong></p>
-                    <ul>
-                        <li><strong>Line charts</strong> for temporal trends: We selected line charts to display annual, seasonal, and monthly cloud fraction data because they clearly communicate trends over time and enable direct comparison between scenarios.</li>
-                        <li><strong>Color palette</strong>: We used a color-blind safe palette with dark navy (#314d64) for historical data and teal (#2a9d8f) for future projections. For seasonal views, we assigned distinct colors to each season (DJF: dark blue-green, MAM: teal, JJA: golden, SON: orange) to help users distinguish patterns.</li>
-                        <li><strong>Brush/zoom interaction</strong>: We implemented a brush chart to enable users to zoom into specific time ranges and explore monthly detail. This provides both an overview (annual data) and detailed exploration (monthly data) in a single interface.</li>
-                        <li><strong>Multiple view modes</strong>: We added toggle buttons for "Annual" and "Seasonal" views to let users switch between aggregated and seasonal perspectives without cluttering the interface.</li>
-            </ul>
-                    <p><strong>Interaction Techniques:</strong></p>
-                    <ul>
-                        <li><strong>Year slider</strong>: Allows users to highlight specific years across all visualizations, creating a synchronized exploration experience.</li>
-                        <li><strong>Scenario filter</strong>: Enables users to focus on historical, future, or both scenarios, with automatic x-axis adjustment to show only relevant time periods.</li>
-                        <li><strong>Hover tooltips</strong>: Provide detailed information (year, scenario, cloud fraction, season/month) on demand without cluttering the main view.</li>
-                        <li><strong>Brush selection</strong>: Users can select time ranges in the brush chart to zoom into monthly detail in the main chart, enabling drill-down exploration.</li>
-            </ul>
-                    <p><strong>Design Alternatives Considered:</strong></p>
-                    <ul>
-                        <li>We considered using area charts instead of line charts but decided lines were cleaner and better for comparing multiple series.</li>
-                        <li>We explored stacked bar charts for seasonal comparison but chose overlay line charts for better temporal trend visualization.</li>
-                        <li>We initially considered separate pages for different views but opted for a single-page design with toggleable sections to maintain context.</li>
-            </ul>
+                    <h3>Motivation & Research Question</h3>
+                    <p>As UCSD students, we often hear that it never rains in San Diego and that sunny beaches are the default forecast. This makes it easy to overlook actual cloud coverage beyond the occasional marine layer. The CMIP6 Amon table contains a vast collection of climate model outputs, and we wanted to use it to move beyond perceptions and measure cloudiness in coastal Southern California.</p>
+                    <p><strong>Research Question:</strong> What is the chance of cloud coverage in coastal Southern California, and how does it change from historical conditions (1850–2014) to future high-emission projections (2015–2100)?</p>
                 </div>
 
                 <div class="writeup-subsection">
-            <h3>Development Process</h3>
-                    <p><strong>Team Collaboration:</strong></p>
-                    <p>The development process was collaborative with team members working on different aspects:</p>
+                    <h3>Data</h3>
+                    <p>We used CMIP6 data from the ACCESS-CM2 model, specifically the <strong>clt</strong> (total cloud fraction) variable from the Amon table. The data spans:</p>
                     <ul>
-                        <li><strong>Data Processing</strong>: One team member focused on processing CMIP6 climate data from Zarr files, extracting the Southern California coastal region, and generating CSV files for annual, seasonal, and monthly aggregates.</li>
-                        <li><strong>Visualization Design</strong>: Team members worked together on designing the layout, selecting color schemes, and planning the interaction flow.</li>
-                        <li><strong>D3.js Implementation</strong>: The visualization code was developed iteratively, with team members implementing different chart components (trend chart, map, seasonal cards) and integrating them into a cohesive dashboard.</li>
-                        <li><strong>Testing & Refinement</strong>: The team collectively tested the visualization, refined interactions, and ensured data accuracy across all views.</li>
-            </ul>
-                    <p><strong>Development Timeline:</strong></p>
-                    <p>Total development time: Approximately <strong>40-50 people-hours</strong> spread across team members.</p>
-                    <p><strong>Time Distribution:</strong></p>
+                        <li><strong>Historical scenario</strong>: 1850–2014 (mean annual cloud fraction)</li>
+                        <li><strong>Future scenario</strong>: 2015–2100 (high-emission projection)</li>
+                        <li><strong>Region</strong>: Southern California coastal box (30°–35°N, 125°–115°W)</li>
+                    </ul>
+                </div>
+
+                <div class="writeup-subsection">
+                    <h3>Data Transformations</h3>
+                    <p>We transformed the raw CMIP6 Zarr data into three cleaned CSV files:</p>
                     <ul>
-                        <li><strong>Data Processing (15-20 hours)</strong>: Extracting and processing CMIP6 data, handling non-standard calendars (cftime), computing temporal aggregates, and debugging data inconsistencies took the most time.</li>
-                        <li><strong>Initial Visualization Setup (8-10 hours)</strong>: Setting up the D3.js infrastructure, creating basic line charts, implementing data loading, and establishing the overall layout.</li>
-                        <li><strong>Interactive Features (10-12 hours)</strong>: Implementing the brush/zoom functionality, year slider synchronization, scenario filtering, and tooltip interactions required careful coordination between different components.</li>
-                        <li><strong>Seasonal View & Monthly Detail (5-6 hours)</strong>: Adding the seasonal view mode, computing seasonal data from monthly aggregates, and implementing the zoom-to-monthly-detail feature.</li>
-                        <li><strong>Polishing & Debugging (5-7 hours)</strong>: Refining styles, fixing edge cases (like scenario filter affecting x-axis domains), ensuring responsive design, and testing across different browsers.</li>
-            </ul>
-                    <p><strong>Challenges Encountered:</strong></p>
+                        <li><strong>fog_socal_timeseries.csv</strong>: Annual mean cloud fraction by scenario and year</li>
+                        <li><strong>fog_socal_seasonal.csv</strong>: Seasonal aggregates (DJF, MAM, JJA, SON) computed from monthly data</li>
+                        <li><strong>fog_socal_monthly.csv</strong>: Monthly averages for all years, enabling monthly zoom and seasonal computation</li>
+                    </ul>
+                    <p>Each file includes parsed dates, extracted year and month fields, and scenario labels to support the slider, brush interaction, and view mode switching. We handled non-standard calendars (cftime objects) when extracting temporal information from the xarray datasets.</p>
+                </div>
+
+                <div class="writeup-divider"></div>
+
+                <div class="writeup-subsection">
+                    <h3>Design Rationale</h3>
+                    <p>We chose line charts as the primary encoding because they effectively communicate temporal trends and enable direct comparison between historical and future scenarios. The x-axis shows years (or months when zoomed), and the y-axis shows mean coastal cloud fraction (%), displaying temporal trends clearly.</p>
+                    <p><strong>Visual Encodings:</strong></p>
                     <ul>
-                        <li>Handling cftime objects in xarray when converting to pandas DataFrames required special attention to date extraction.</li>
-                        <li>Coordinating the x-axis domain updates when scenario filters changed across different view modes (annual, seasonal, monthly) was complex.</li>
-                        <li>Implementing smooth transitions between view modes while maintaining state (zoom level, selected year) required careful state management.</li>
-                        <li>Ensuring the brush chart and main chart stayed synchronized when scenario filters changed.</li>
-            </ul>
-        </div>
+                        <li><strong>Color palette</strong>: Color-blind safe palette with dark navy (#314d64) for historical data and teal (#2a9d8f) for future projections. In seasonal view, each season has a distinct color (DJF: dark blue-green, MAM: teal, JJA: golden, SON: orange), with future data shown as dashed lines.</li>
+                        <li><strong>View modes</strong>: Toggle between "Annual" (yearly means) and "Seasonal" (four seasonal lines per scenario). When zooming via brush selection, the view switches to monthly detail.</li>
+                    </ul>
+                    <p><strong>Interaction Techniques:</strong></p>
+                    <ul>
+                        <li><strong>Scenario visibility toggle</strong>: Interactive buttons to show "Both", "Historical only", or "Future only" scenarios. Automatically adjusts the x-axis range to show only relevant time periods.</li>
+                        <li><strong>Year slider</strong>: Highlights specific years/months across the visualization. Adapts its range and step size based on the current view (yearly in annual/seasonal view, monthly when zoomed).</li>
+                        <li><strong>Brush/zoom</strong>: Integrated directly on the main chart, allowing users to select time ranges for monthly zoom. Supports multiple levels of zooming with a minimum range of 1 year. The slider updates to navigate within the selected range.</li>
+                        <li><strong>Seasonal legend</strong>: In seasonal view, click legend items to show or hide specific season-scenario combinations for focused comparison.</li>
+                        <li><strong>Tooltips</strong>: Hover over data points or use the slider to see detailed information (year/month, scenario, season, cloud fraction percentage). Tooltips display scenario names in grey for visual hierarchy.</li>
+                    </ul>
+                    <p><strong>Alternatives Considered:</strong></p>
+                    <ul>
+                        <li>We considered area charts but found lines cleaner for comparing multiple series.</li>
+                        <li>We explored stacked bar charts for seasonal comparison but chose overlaid line charts for better temporal trend visualization.</li>
+                        <li>We initially considered separate pages for different views but opted for a single-page design with toggleable sections to maintain context.</li>
+                    </ul>
+                </div>
+
+                <div class="writeup-divider"></div>
+
+                <div class="writeup-subsection">
+                    <h3>Development Process</h3>
+                    <p><strong>Team:</strong> Shunyi Du (s7du@ucsd.edu), Vanshika Somani (vsomani@ucsd.edu), Amjad Muhamad Afandy (amuhamadafandy@ucsd.edu), Sunny Sun (chs019@ucsd.edu)</p>
+                    <p><strong>Time:</strong> Approximately <strong>25 people-hours</strong></p>
+                    <p><strong>Work Distribution:</strong></p>
+                    <ul>
+                        <li><strong>Sunny</strong>: Data wrangling and page scaffolding, which involved extracting the Southern California coastal region from large Zarr files and generating aggregated CSV files.</li>
+                        <li><strong>Vanshika and Shunyi</strong>: Built the visualization components together, including the main trend chart, the brush chart for zooming, and integrating the various interactive elements.</li>
+                        <li><strong>Amjad</strong>: Integrated interactions and polished up the final product.</li>
+                    </ul>
+                    <p><strong>What Took the Most Time:</strong></p>
+                    <p>Most of the time was spent on interaction polish like brush communications and reset logic, and debugging layout issues.</p>
+                </div>
             </div>
         </section>
 
@@ -130,6 +167,10 @@
             </div>
         </section>
     </div>
+
+    <footer class="page-footer">
+        <p>FA25 DSC106 Project 3 • CMIP6 Climate Data Visualization • Nov 2025</p>
+    </footer>
 
     <div class="tooltip" id="tooltip"></div>
 
